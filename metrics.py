@@ -1,0 +1,179 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+"""
+containing all the metrics computation
+"""
+def compute_trend_sharpe(
+    df: pd.DataFrame
+) -> pd.Series:
+    """
+    Annualized Sharpe Ratio.
+
+    Sharpe =
+    sqrt(252) * mean(daily return)
+                / std(daily return)
+    
+    returns scale linearly with time, volatility scales with the sqrt of time
+    """
+
+    ret_1d = df.pct_change() #computing returns (P_t -P_{t-1})/P_{t-1}
+
+    sharpe = (
+        np.sqrt(252)
+        * ret_1d.mean()
+        / ret_1d.std()
+    )
+
+    return sharpe.sort_values()
+
+def compute_noise_ratio(
+    df: pd.DataFrame
+) -> pd.Series:
+    """
+    Compute close-only noise ratio.
+
+    Lower = smoother trend.
+    Higher = noisier trend.
+
+    noise ratio = ATR percentage / 20-day directional move
+    ATR % = ATR_{14} / price
+    directional move = abs(P_t - P_{t-20} / P_{t-20})
+
+    small noise ratio == smooth trend
+    """
+
+    ret = df.pct_change()
+
+    vol20 = ret.rolling(20).std()
+
+    move20 = (
+        df
+        .pct_change(20)
+        .abs()
+    )
+
+    noise_ratio = (
+        vol20
+        / move20
+    ).median()
+
+    return noise_ratio.sort_values()
+
+def compute_drawdown_structure_ratio(
+    close: pd.Series
+) -> float:
+    """
+    Compute drawdown structure ratio
+    for a single commodity.
+    """
+
+    nav = (
+        close
+        / close.iloc[0]
+    )
+
+    drawdown = (
+        nav
+        / nav.cummax()
+        - 1
+    )
+
+    max_drawdown = drawdown.min()
+
+    net_move = abs(
+        close.iloc[-1]
+        / close.iloc[0]
+        - 1
+    )
+
+    if net_move == 0:
+        return np.nan
+
+    return (
+        abs(max_drawdown)
+        / net_move
+    )
+
+def compute_drawdown_structure_ratios(
+    df: pd.DataFrame
+) -> pd.Series:
+
+    ratios = {}
+
+    for col in df.columns:
+
+        close = df[col].dropna()
+
+        ratios[col] = (
+            compute_drawdown_structure_ratio(
+                close
+            )
+        )
+
+    return (
+        pd.Series(ratios)
+        .sort_values()
+    )
+
+def compute_gap_ratio(
+    close: pd.Series,
+    threshold: float = 0.02
+) -> float:
+    """
+    Compute gap ratio for a single commodity.
+
+    Parameters
+    ----------
+    close : pd.Series
+        Price series.
+
+    threshold : float
+        Daily move threshold regarded
+        as a "gap".
+
+    Returns
+    -------
+    float
+        Fraction of days whose absolute
+        return exceeds threshold.
+    """
+
+    gaps = (
+        close
+        .pct_change()
+        .abs()
+        > threshold
+    )
+
+    return gaps.mean()
+
+def compute_gap_ratios(
+    df: pd.DataFrame,
+    threshold: float = 0.02
+) -> pd.Series:
+    """
+    Compute gap ratio
+    for every commodity.
+
+    smaller = more continuous
+    """
+
+    ratios = {}
+
+    for col in df.columns:
+
+        close = df[col].dropna()
+
+        ratios[col] = (
+            compute_gap_ratio(
+                close,
+                threshold
+            )
+        )
+
+    return (
+        pd.Series(ratios)
+        .sort_values()
+    )

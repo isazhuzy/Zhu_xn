@@ -64,34 +64,6 @@ def clean_wind_commodity_data(filepath: str) -> pd.DataFrame:
 
 
 # ==========================================================
-# metrics
-# ==========================================================
-
-def compute_trend_sharpe(
-    df: pd.DataFrame
-) -> pd.Series:
-    """
-    Annualized Sharpe Ratio.
-
-    Sharpe =
-    sqrt(252) * mean(daily return)
-                / std(daily return)
-    
-    returns scale linearly with time, volatility scales with the sqrt of time
-    """
-
-    ret_1d = df.pct_change() #computing returns (P_t -P_{t-1})/P_{t-1}
-
-    sharpe = (
-        np.sqrt(252)
-        * ret_1d.mean()
-        / ret_1d.std()
-    )
-
-    return sharpe.sort_values()
-
-
-# ==========================================================
 # plotting
 # ==========================================================
 
@@ -173,14 +145,3 @@ def main() -> None:
         .sort_values(ascending=False)
         .head(10)
     )
-
-    plot_metric(
-        trend_sharpe,
-        title="趋势流畅度对比",
-        filename="trend_sharpe.png",
-        xlabel="Trend Sharpe"
-    )
-
-if __name__ == "__main__":
-    main()
-
