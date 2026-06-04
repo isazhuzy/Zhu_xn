@@ -365,3 +365,126 @@ def compute_gap_ratios(
         pd.Series(ratios)
         .sort_values()
     )
+
+############
+"""
+make_figures.py
+===============
+Figure generation for the commodity trend study, organized to match your
+existing layout:
+
+    [ METRICS  ]  all computation (mirrors your metrics module)
+    [ PLOTTING ]  cleaning & plotting helpers
+    [ MAIN     ]  main() that builds the figures
+
+In your project these three blocks live in separate files; just move each
+block into the matching module and fix the imports. Everything here only
+depends on pandas / numpy / matplotlib.
+
+Figures produced:
+    fig_5y_sharpe_blocks.png    5-year-period Sharpe, grouped bars
+    fig_rolling_5y_sharpe.png   rolling 5-year Sharpe, lines
+    fig_yearly_gap.png          yearly (1-year) gap ratio, selected commodities
+    fig_yearly_drawdown.png     yearly drawdown structure ratio
+    fig_four_dim_yearly.png     2x2 panel: Sharpe / noise / drawdown / gap
+"""
+
+# =============================================================================
+# METRICS  (computation — mirrors / extends your metrics module)
+# =============================================================================
+
+def compute_yearly_gap_ratio(
+    close: pd.Series,
+    threshold: float = 0.02,
+    min_days: int = 30,
+) -> pd.Series:
+    """
+    Yearly gap ratio for ONE commodity — the missing twin of your
+    compute_yearly_noise_ratio / compute_yearly_drawdown_ratio.
+
+    gap ratio = fraction of days in the year whose |daily return| > threshold.
+    Lower = more continuous.
+    """
+    results = {}
+
+    years = sorted(close.index.year.unique())
+
+    for year in years:
+        year_data = close[close.index.year == year].dropna()
+
+        if len(year_data) < min_days:
+            continue
+
+        gaps = year_data.pct_change().abs() > threshold
+        results[year] = gaps.mean()
+
+    return pd.Series(results)
+
+
+def compute_block_sharpe(
+    close: pd.Series,
+    blocks: list[tuple[int, int]],
+) -> pd.Series:
+    """
+    Sharpe over fixed multi-year blocks for ONE commodity, e.g.
+    blocks = [(2010, 2014), (2015, 2019), (2020, 2024)] for 5-year periods.
+
+    Returns a Series indexed by a "2010-2014" style label.
+    """
+    results = {}
+
+    for start, end in blocks:
+        seg = close.loc[f"{start}-01-01":f"{end}-12-31"].dropna()
+
+        if len(seg) < 60:
+            continue
+
+        ret = seg.pct_change()
+        results[f"{start}-{end}"] = (
+            np.sqrt(252) * ret.mean() / ret.std()
+        )
+
+    return pd.Series(results)
+
+
+def compute_rolling_sharpe(
+    close: pd.Series,
+    window_years: int = 5,
+    trading_days: int = 252,
+) -> pd.Series:
+    """
+    Rolling annualized Sharpe over a `window_years`-year window for ONE
+    commodity (daily resolution). Use for the smooth "5-year Sharpe" curve.
+    """
+    window = window_years * trading_days
+
+    ret = close.pct_change()
+    rolling = (
+        np.sqrt(252)
+        * ret.rolling(window).mean()
+        / ret.rolling(window).std()
+    )
+
+    return rolling.dropna()
+
+
+def yearly_metric_table(
+    df: pd.DataFrame,
+    selected: list[str],
+    metric_func,
+    **kwargs,
+) -> dict[str, pd.Series]:
+    """
+    Apply a per-commodity yearly metric (e.g. compute_yearly_gap_ratio,
+    your compute_yearly_drawdown_ratio / compute_yearly_sharpe) to each
+    name in `selected`. Returns {commodity: yearly Series}.
+    """
+    return {
+        col: metric_func(df[col].dropna(), **kwargs)
+        for col in selected
+        if col in df.columns
+    }
+
+
+
+
