@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from cleaning_and_plotting import *
 from metrics import *
 
-
 # def main():
 
 #     df = clean_wind_commodity_data(

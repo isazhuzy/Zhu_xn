@@ -147,6 +147,7 @@ def plot_time_series(
     plt.show()
 
     plt.close()
+    
 def plot_multiple_time_series(
     data_dict: dict,
     title: str,

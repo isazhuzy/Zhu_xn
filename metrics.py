@@ -204,7 +204,7 @@ def compute_drawdown_structure_ratio(
 
     drawdown = (
         nav
-        / nav.cummax()
+        / nav.cummax() #cumulative maximum
         - 1
     )
 
@@ -226,7 +226,7 @@ def compute_drawdown_structure_ratio(
 
 def compute_drawdown_structure_ratios(
     df: pd.DataFrame
-) -> pd.Series:
+    ) -> pd.Series:
     """
     calculating drawdown ratios of all commodities
     """
@@ -249,7 +249,7 @@ def compute_drawdown_structure_ratios(
 
 def compute_yearly_drawdown_ratio(
     close: pd.Series
-) -> pd.Series:
+    ) -> pd.Series:
     """
     Compute yearly drawdown structure ratio.
     """
@@ -285,7 +285,7 @@ def compute_drawdown_ratio_period(
     df: pd.DataFrame,
     start_year: int,
     end_year: int
-) -> pd.Series:
+    ) -> pd.Series:
     """
     Compute drawdown ratio
     over a specific period.
@@ -308,7 +308,7 @@ def compute_drawdown_ratio_period(
 def compute_gap_ratio(
     close: pd.Series,
     threshold: float = 0.02
-) -> float:
+    ) -> float:
     """
     Compute gap ratio for a single commodity.
 
@@ -340,7 +340,7 @@ def compute_gap_ratio(
 def compute_gap_ratios(
     df: pd.DataFrame,
     threshold: float = 0.02
-) -> pd.Series:
+    ) -> pd.Series:
     """
     Compute gap ratio
     for every commodity.
@@ -411,10 +411,8 @@ def compute_yearly_gap_ratio(
 
     for year in years:
         year_data = close[close.index.year == year].dropna()
-
         if len(year_data) < min_days:
             continue
-
         gaps = year_data.pct_change().abs() > threshold
         results[year] = gaps.mean()
 
@@ -424,7 +422,7 @@ def compute_yearly_gap_ratio(
 def compute_block_sharpe(
     close: pd.Series,
     blocks: list[tuple[int, int]],
-) -> pd.Series:
+    ) -> pd.Series:
     """
     Sharpe over fixed multi-year blocks for ONE commodity, e.g.
     blocks = [(2010, 2014), (2015, 2019), (2020, 2024)] for 5-year periods.
@@ -451,7 +449,7 @@ def compute_rolling_sharpe(
     close: pd.Series,
     window_years: int = 5,
     trading_days: int = 252,
-) -> pd.Series:
+    ) -> pd.Series:
     """
     Rolling annualized Sharpe over a `window_years`-year window for ONE
     commodity (daily resolution). Use for the smooth "5-year Sharpe" curve.
@@ -473,7 +471,7 @@ def yearly_metric_table(
     selected: list[str],
     metric_func,
     **kwargs,
-) -> dict[str, pd.Series]:
+    ) -> dict[str, pd.Series]:
     """
     Apply a per-commodity yearly metric (e.g. compute_yearly_gap_ratio,
     your compute_yearly_drawdown_ratio / compute_yearly_sharpe) to each
