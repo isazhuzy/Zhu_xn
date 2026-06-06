@@ -490,3 +490,16 @@ def tsmom_sharpe(close, lookback=120, vol_lookback=60, vol_target=0.15, max_leve
     position = (signal * scale).shift(1)                      # lag 1 day, no look-ahead
     strat_ret = (position * ret).dropna()                     # strategy P&L
     return np.sqrt(252) * strat_ret.mean() / strat_ret.std()  # annualized Sharpe
+
+def yearly_abs_sharpe_table(df: pd.DataFrame, min_days: int = 20) -> pd.DataFrame:
+    """
+    |annual Sharpe| for every product.
+
+    Reuses your existing compute_yearly_sharpe per column, then takes the
+    absolute value. Returns a DataFrame indexed by year, one column per product.
+    """
+    table = pd.DataFrame({
+        col: compute_yearly_sharpe(df[col].dropna(), min_days=min_days)
+        for col in df.columns
+    }).sort_index()
+    return table.abs()

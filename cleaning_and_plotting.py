@@ -147,7 +147,7 @@ def plot_time_series(
     plt.show()
 
     plt.close()
-    
+
 def plot_multiple_time_series(
     data_dict: dict,
     title: str,
@@ -405,3 +405,55 @@ def load_clean_prices(path: str, skiprows: int = 4) -> pd.DataFrame:
     raw["Date"] = pd.to_datetime(raw["Date"], errors="coerce")
     raw = raw.dropna(subset=["Date"]).set_index("Date").sort_index()
     return raw.apply(pd.to_numeric, errors="coerce")
+
+def plot_yearly_abs_sharpe_heatmap(
+    table: pd.DataFrame,
+    title: str = "各品种年度趋势强度 |夏普| (Absolute annual Sharpe)",
+    savepath: str | None = None,
+    sort_by_mean: bool = True,
+    cmap: str = "YlGnBu",
+) -> None:
+    """
+    One heatmap: products (rows) x years (columns), colored by |annual Sharpe|.
+    Sequential colormap from 0 (no trend) to high (strong trend either way).
+    Pass the output of yearly_abs_sharpe_table().
+    """
+    mat = table.copy()
+
+    if sort_by_mean:  # strongest-trending products at the top
+        order = mat.mean(axis=0).sort_values(ascending=False).index
+        mat = mat[order]
+
+    M = mat.T  # rows = products, cols = years
+    years = M.columns.astype(int).tolist()
+    products = M.index.tolist()
+
+    vmax = np.nanmax(M.values)
+
+    fig, ax = plt.subplots(figsize=(max(10, len(years) * 0.6),
+                                    max(12, len(products) * 0.22)))
+
+    im = ax.imshow(M.values, aspect="auto", cmap=cmap, vmin=0, vmax=vmax)
+
+    ax.set_xticks(np.arange(len(years)))
+    ax.set_xticklabels(years)
+    ax.set_yticks(np.arange(len(products)))
+    ax.set_yticklabels(products, fontsize=8)
+    ax.set_xlabel("Year")
+    ax.set_title(title, fontsize=13, pad=10)
+
+    for i in range(M.shape[0]):
+        for j in range(M.shape[1]):
+            v = M.values[i, j]
+            if np.isfinite(v):
+                ax.text(j, i, f"{v:.1f}", ha="center", va="center",
+                        fontsize=6,
+                        color="white" if v > vmax * 0.55 else "black")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.025, pad=0.02)
+    cbar.set_label("|Annualized Sharpe|")
+
+    plt.tight_layout()
+    if savepath:
+        plt.savefig(savepath, dpi=150, bbox_inches="tight")
+    plt.close()

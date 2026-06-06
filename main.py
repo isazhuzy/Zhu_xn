@@ -102,7 +102,22 @@ def main():
         savepath="fig_four_dim_yearly.png",
     )
 
+
+
+    abs_table = yearly_abs_sharpe_table(df, min_days=20)
+    abs_table.round(3).to_csv(
+        "/mnt/user-data/outputs/yearly_abs_sharpe_table.csv",
+        encoding="utf-8-sig",
+    )
+
+    plot_yearly_abs_sharpe_heatmap(
+        abs_table,
+        savepath="/mnt/user-data/outputs/yearly_abs_sharpe_heatmap.png",
+    )
+    print(f"{abs_table.shape[1]} products, years "
+          f"{abs_table.index.min()}-{abs_table.index.max()}")
     print("figures written.")
+
 
 if __name__ == "__main__":
     main()
