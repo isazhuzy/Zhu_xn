@@ -503,3 +503,27 @@ def yearly_abs_sharpe_table(df: pd.DataFrame, min_days: int = 20) -> pd.DataFram
         for col in df.columns
     }).sort_index()
     return table.abs()
+
+    def compute_yearly_sharpe(close: pd.Series, min_days: int = 20) -> pd.Series:
+    out = {}
+    for y in sorted(close.index.year.unique()):
+        d = close[close.index.year == y].dropna()
+        if len(d) < min_days:
+            continue
+        r = d.pct_change()
+        out[y] = np.sqrt(252) * r.mean() / r.std()
+    return pd.Series(out)
+
+
+def compute_yearly_drawdown_ratio(close: pd.Series, min_days: int = 30,
+                                  net_floor: float = 0.05) -> pd.Series:
+    out = {}
+    for y in sorted(close.index.year.unique()):
+        d = close[close.index.year == y].dropna()
+        if len(d) < min_days:
+            continue
+        nav = d / d.iloc[0]
+        dd = abs((nav / nav.cummax() - 1).min())
+        net = max(abs(d.iloc[-1] / d.iloc[0] - 1), net_floor)
+        out[y] = dd / net
+    return pd.Series(out)

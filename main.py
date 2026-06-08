@@ -5,9 +5,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-from cleaning_and_plotting import *
-from metrics import *
+from metrics import (
+    compute_yearly_sharpe,
+    compute_yearly_gap_ratio,
+    compute_yearly_drawdown_ratio,
+)
 
+from cleaning_and_plotting import (
+    load_clean_prices,
+    plot_yearly_metric,
+    plot_four_dim_yearly,
+)
 TICKER_CN = {
     "AUFI.WI": "黄金", "AGFI.WI": "白银", "SNFI.WI": "锡", "CUFI.WI": "铜",
     "ALFI.WI": "铝", "ZNFI.WI": "锌", "NIFI.WI": "镍", "PBFI.WI": "铅",
