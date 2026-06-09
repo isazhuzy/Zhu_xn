@@ -1,131 +1,141 @@
 """
-generate the figures
+main.py
+=======
+Reproduces every figure and table in 《Wind 商品趋势研究 v2》, in report order.
+Run:  python main.py [path_to_wind_xlsx]
+
+Outputs (figures + CSVs) go to OUT below. Figure numbers match the report.
 """
+
+from __future__ import annotations
+import sys
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import os
 
-from metrics import (
-    compute_yearly_sharpe,
-    compute_yearly_gap_ratio,
-    compute_yearly_drawdown_ratio,
-)
-
+import metrics as mx
 from cleaning_and_plotting import (
-    load_clean_prices,
-    plot_yearly_metric,
-    plot_four_dim_yearly,
+    TICKER_CN, load_clean_prices,
+    plot_metric, plot_yearly_metric, plot_all_products_yearly,
+    plot_yearly_small_multiples, plot_block_sharpe, plot_rolling_sharpe,
+    plot_four_dim_yearly, plot_yearly_sharpe_heatmap, plot_yearly_abs_sharpe_heatmap,
+    plot_fixed_vs_adaptive_gap, plot_predictive_scatter,
 )
-TICKER_CN = {
-    "AUFI.WI": "黄金", "AGFI.WI": "白银", "SNFI.WI": "锡", "CUFI.WI": "铜",
-    "ALFI.WI": "铝", "ZNFI.WI": "锌", "NIFI.WI": "镍", "PBFI.WI": "铅",
-    "SSFI.WI": "不锈钢", "RBFI.WI": "螺纹钢", "HCFI.WI": "热卷", "IFI.WI": "铁矿石",
-    "JFI.WI": "焦炭", "JMFI.WI": "焦煤", "SFFI.WI": "硅铁", "SMFI.WI": "锰硅",
-    "CFI.WI": "玉米", "CSFI.WI": "玉米淀粉", "AFI.WI": "豆一", "MFI.WI": "豆粕",
-    "YFI.WI": "豆油", "OIFI.WI": "菜籽油", "RMFI.WI": "菜籽粕", "PFI.WI": "棕榈油",
-    "CFFI.WI": "棉花", "CJFI.WI": "红枣", "SRFI.WI": "白糖", "APLFI.WI": "苹果",
-    "JDFI.WI": "鸡蛋", "LHFI.WI": "生猪", "PKFI.WI": "花生", "SPFI.WI": "纸浆",
-    "BUFI.WI": "沥青", "FUFI.WI": "燃料油", "LUFI.WI": "低硫燃料油", "SCFI.WI": "原油",
-    "PGFI.WI": "液化石油气", "TAFI.WI": "PTA", "PXFI.WI": "对二甲苯", "PRFI.WI": "瓶片",
-    "EGFI.WI": "乙二醇", "EBFI.WI": "苯乙烯", "MAFI.WI": "甲醇", "PPFI.WI": "聚丙烯",
-    "LFI.WI": "聚乙烯", "VFI.WI": "PVC", "URFI.WI": "尿素", "SAFI.WI": "纯碱",
-    "FGFI.WI": "玻璃", "RUFI.WI": "天然橡胶", "NRFI.WI": "20号胶", "LGFI.WI": "原木",
-    "LCFI.WI": "碳酸锂", "SIFI.WI": "工业硅", "SHFI.WI": "烧碱", "AOFI.WI": "氧化铝",
-    "ECFI.WI": "集运指数(欧线)", "PSFI.WI": "多晶硅", "PLFI.WI": "烯", "PTFI.WI": "铂", 
-    "PDFI.WI": "钯",
-}
 
-def compute_yearly_sharpe(close: pd.Series, min_days: int = 20) -> pd.Series:
-    out = {}
-    for y in sorted(close.index.year.unique()):
-        d = close[close.index.year == y].dropna()
-        if len(d) < min_days:
-            continue
-        r = d.pct_change()
-        out[y] = np.sqrt(252) * r.mean() / r.std()
-    return pd.Series(out)
+OUT = "outputs"
+
+# Focus baskets reused across the yearly views.
+SELECTED = ["黄金", "棉花", "生猪", "工业硅", "玉米", "集运指数(欧线)"]
+
+# (板块, 品种) rows for the 七 overview table — same order as the report.
+SUMMARY_ROWS = [
+    ("贵金属", "黄金"), ("有色金属", "铜"), ("黑色", "螺纹钢"), ("黑色", "铁矿石"),
+    ("黑色", "焦煤"), ("农产品", "豆粕"), ("农产品", "棕榈油"), ("农产品", "玉米"),
+    ("农产品", "生猪"), ("新能源", "碳酸锂"), ("航运", "集运指数(欧线)"), ("新能源", "工业硅"),
+]
 
 
-def compute_yearly_drawdown_ratio(close: pd.Series, min_days: int = 30,
-                                  net_floor: float = 0.05) -> pd.Series:
-    out = {}
-    for y in sorted(close.index.year.unique()):
-        d = close[close.index.year == y].dropna()
-        if len(d) < min_days:
-            continue
-        nav = d / d.iloc[0]
-        dd = abs((nav / nav.cummax() - 1).min())
-        net = max(abs(d.iloc[-1] / d.iloc[0] - 1), net_floor)
-        out[y] = dd / net
-    return pd.Series(out)
+def main(path: str) -> None:
+    os.makedirs(OUT, exist_ok=True)
+    df = load_clean_prices(path).rename(columns=TICKER_CN)
+    print(f"Loaded {df.shape[1]} products, {df.shape[0]} days "
+          f"({df.index.min().date()} -> {df.index.max().date()})")
 
+    # ---- 二 趋势夏普 -------------------------------------------------------
+    plot_metric(mx.compute_trend_sharpe(df),
+                "全样本趋势夏普 (Full-sample trend Sharpe)",
+                f"{OUT}/fig01_trend_sharpe.png", "Annualized Sharpe")            # 图1
 
-def main():
-    PATH = "Copy of wind品种指数数据(1).xlsx"
-    df = load_clean_prices(PATH)
-    df = df.rename(columns=TICKER_CN)          # <-- tickers become Chinese names
+    sharpe_tbl = mx.yearly_sharpe_table(df)
+    plot_yearly_sharpe_heatmap(sharpe_tbl, savepath=f"{OUT}/fig02_yearly_sharpe_heatmap.png")  # 图2
+    abs_tbl = mx.yearly_abs_sharpe_table(df)
+    plot_yearly_abs_sharpe_heatmap(abs_tbl, savepath=f"{OUT}/fig03_yearly_abs_sharpe_heatmap.png")  # 图3
 
-    # selected now uses Chinese names (must match the renamed columns)
-    selected = ["黄金", "棉花", "生猪", "工业硅", "玉米", "集运指数(欧线)"]
+    # ---- 三 噪声比 ---------------------------------------------------------
+    plot_metric(mx.compute_noise_ratios(df),
+                "全产品噪声比 (Noise ratio, sorted)",
+                f"{OUT}/fig04_noise_ratio.png", "Noise ratio")                   # 图4
+    noise_all = mx.all_products_yearly_table(df, mx.compute_yearly_noise_ratio)
+    plot_yearly_small_multiples(noise_all, "全品种年度噪声比 (分品种小图)",
+                                "Noise ratio", f"{OUT}/fig05_yearly_noise_small_multiples.png",
+                                ymax=1.2, max_year=2025)                          # 图5
+    plot_yearly_metric(mx.yearly_metric_table(df, SELECTED, mx.compute_yearly_noise_ratio),
+                       "全品种年度噪声比 (重点品种)", "Noise ratio",
+                       max_year=2025, savepath=f"{OUT}/fig06_yearly_noise_selected.png")  # 图6
 
-    # 1) 5-year Sharpe — block comparison + rolling
-    plot_block_sharpe(
-        df, selected,
-        blocks=[(2010, 2014), (2015, 2019), (2020, 2024)],
-        savepath="fig_5y_sharpe_blocks.png",
-    )
-    plot_rolling_sharpe(df, selected, window_years=5,
-                        savepath="fig_rolling_5y_sharpe.png")
+    # ---- 四 回撤结构比 -----------------------------------------------------
+    plot_metric(mx.compute_drawdown_structure_ratios(df),
+                "全产品回撤结构比 (|max DD| / |net move|, sorted)",
+                f"{OUT}/fig07_drawdown_ratio.png", "Drawdown structure ratio")    # 图7
+    plot_yearly_metric(mx.yearly_metric_table(df, SELECTED, mx.compute_yearly_drawdown_ratio),
+                       "全品种年度回撤结构比 (重点品种)", "DD ratio",
+                       max_year=2025, savepath=f"{OUT}/fig08_yearly_drawdown_selected.png")  # 图8
+    dd_all = mx.all_products_yearly_table(df, mx.compute_yearly_drawdown_ratio)
+    plot_yearly_small_multiples(dd_all, "全品种年度回撤结构比 (分品种小图)",
+                                "DD ratio", f"{OUT}/fig09_yearly_drawdown_small_multiples.png",
+                                ymax=8.0, max_year=2025)                          # 图9
+    plot_metric(mx.compute_block_drawdown_ratios(df, 2020, 2024),
+                "五年回撤结构比 (2020–2024, sorted)",
+                f"{OUT}/fig10_block_drawdown_2020_2024.png", "Drawdown structure ratio")  # 图10
 
-    # 2) yearly (1-year) gap ratio of selected commodities
-    gap_by_name = yearly_metric_table(df, selected, compute_yearly_gap_ratio)
-    plot_yearly_metric(
-        gap_by_name,
-        title="Yearly gap ratio (|return| > 2%)",
-        ylabel="Gap ratio",
-        max_year=2025, hline=0.10,
-        savepath="fig_yearly_gap.png",
-    )
+    # ---- 五 跳空比: 固定 2% --------------------------------------------------
+    plot_metric(mx.compute_gap_ratios(df, threshold=0.02),
+                "全商品跳空比 (固定 2%, sorted)",
+                f"{OUT}/fig11_gap_fixed.png", "Gap ratio (|ret| > 2%)")           # 图11
+    plot_yearly_metric(mx.yearly_metric_table(df, SELECTED, mx.compute_yearly_gap_ratio),
+                       "全品种年度跳空比 (固定 2%, 重点品种)", "Gap ratio",
+                       max_year=2025, hline=0.10, savepath=f"{OUT}/fig12_yearly_gap_fixed_selected.png")  # 图12
+    gap_all = mx.all_products_yearly_table(df, mx.compute_yearly_gap_ratio)
+    plot_yearly_small_multiples(gap_all, "全品种年度跳空比 (固定 2%, 分品种小图)",
+                                "Gap ratio", f"{OUT}/fig13_yearly_gap_fixed_small_multiples.png",
+                                ymax=0.6, max_year=2025)                          # 图13
 
-    # 3) yearly drawdown structure ratio
-    dd_by_name = yearly_metric_table(df, selected, compute_yearly_drawdown_ratio)
-    plot_yearly_metric(
-        dd_by_name,
-        title="Yearly drawdown structure ratio (low = clean)",
-        ylabel="|max DD| / |net move|",
-        max_year=2025,
-        savepath="fig_yearly_drawdown.png",
-    )
+    # ---- 五 跳空比: 自适应 3σ ------------------------------------------------
+    adaptive_thresh = pd.Series(
+        {c: mx.adaptive_gap_threshold(df[c]) * 100 for c in df.columns}
+    ).dropna().sort_values()
+    plot_metric(adaptive_thresh,
+                "各品种自适应跳空阈值 (3σ, % 日涨跌幅)",
+                f"{OUT}/fig14_adaptive_threshold.png", "Threshold (% daily move)")  # 图14
+    joined, rho_gap, _ = mx.fixed_vs_adaptive_gap(df)
+    plot_fixed_vs_adaptive_gap(joined, rho_gap, savepath=f"{OUT}/fig15_fixed_vs_adaptive_gap.png")  # 图15
+    adapt_all = mx.all_products_yearly_table(df, mx.compute_yearly_adaptive_gap_ratio)
+    plot_yearly_small_multiples(adapt_all, "全品种年度跳空比 (自适应 3σ, 分品种小图)",
+                                "Adaptive gap ratio", f"{OUT}/fig16_yearly_gap_adaptive_small_multiples.png",
+                                ymax=0.1, max_year=2025)                          # 图16
 
-    # 4) four-dimension 2x2 panel
-    plot_four_dim_yearly(
-        df, selected,
-        metric_funcs={
-            "Yearly Sharpe":          (compute_yearly_sharpe,          "Sharpe",          {}),
-            "Yearly noise (low=smooth)": (compute_yearly_gap_ratio,    "Gap ratio",       {}),
-            "Yearly drawdown (low=clean)": (compute_yearly_drawdown_ratio, "DD ratio",   {}),
-            "Yearly gap (>2%)":       (compute_yearly_gap_ratio,       "Gap ratio",       {}),
-        },
-        max_year=2025,
-        savepath="fig_four_dim_yearly.png",
-    )
+    # ---- 六 TSMOM ----------------------------------------------------------
+    plot_metric(mx.tsmom_sharpes(df),
+                "全样本 TSMOM 夏普 (sorted)",
+                f"{OUT}/fig17_tsmom_sharpe.png", "TSMOM Sharpe")                  # 图17
+    plot_yearly_metric(mx.yearly_metric_table(df, SELECTED, mx.compute_yearly_tsmom_sharpe),
+                       "全品种年度 TSMOM 夏普 (重点品种)", "TSMOM Sharpe",
+                       max_year=2025, savepath=f"{OUT}/fig18_yearly_tsmom_selected.png")  # 图18
 
+    # ---- 七 六维度总览表 ----------------------------------------------------
+    summary = mx.build_summary_table(df, SUMMARY_ROWS)
+    summary.to_csv(f"{OUT}/table07_summary.csv", index=False, encoding="utf-8-sig")
+    print("\n七 · 六维度总览\n", summary.to_string(index=False))
 
+    # ---- 八 可预测性实验 ----------------------------------------------------
+    pred_tbl, R = mx.predictive_validity(df)
+    pred_tbl.to_csv(f"{OUT}/table08_predictive_validity.csv", index=False, encoding="utf-8-sig")
+    print("\n八 · 可预测性\n", pred_tbl.round(3).to_string(index=False))
 
-    abs_table = yearly_abs_sharpe_table(df, min_days=20)
-    abs_table.round(3).to_csv(
-        "/mnt/user-data/outputs/yearly_abs_sharpe_table.csv",
-        encoding="utf-8-sig",
-    )
+    bh = mx.buyhold_vs_tsmom(df)
+    rho_bh, _ = mx._spearman(bh["buyhold"], bh["tsmom"])
+    rho_noise = float(pred_tbl.loc[pred_tbl["metric"] == "is_noise", "rank_corr"].iloc[0])
+    plot_predictive_scatter(bh, R, rho_bh, rho_noise, savepath=f"{OUT}/fig19_predictability.png")  # 图19
 
-    plot_yearly_abs_sharpe_heatmap(
-        abs_table,
-        savepath="/mnt/user-data/outputs/yearly_abs_sharpe_heatmap.png",
-    )
-    print(f"{abs_table.shape[1]} products, years "
-          f"{abs_table.index.min()}-{abs_table.index.max()}")
-    print("figures written.")
+    # ---- supporting tables --------------------------------------------------
+    abs_tbl.round(3).to_csv(f"{OUT}/yearly_abs_sharpe_table.csv", encoding="utf-8-sig")
+    sharpe_tbl.round(3).to_csv(f"{OUT}/yearly_sharpe_table.csv", encoding="utf-8-sig")
+    print("\nVariance ratio median:", round(mx.variance_ratios(df).median(), 3))
+    print("Diversified basket vs single-name (2019+):")
+    for k, v in mx.basket_vs_single(df).items():
+        print(f"    {k:20s} {v:.3f}" if isinstance(v, float) else f"    {k:20s} {v}")
+    print("\nAll figures + tables written to", OUT)
 
 
 if __name__ == "__main__":
-    main()
+    PATH = sys.argv[1] if len(sys.argv) > 1 else "Copy of wind品种指数数据(1).xlsx"
+    main(PATH)
